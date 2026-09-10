@@ -1,6 +1,17 @@
 {
   "sources": [
     {
+      "id": "aerodrome-base-full",
+      "description": "Aerodrome DEX pools on Base",
+      "subgraph_id": "GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM",
+      "chain": "base",
+      "rpc_url": "https://mainnet.base.org",
+      "tiers": {
+        "realtime": { "max_age_seconds": 5, "price_tinybar": 1000000 },
+        "delayed": { "max_age_seconds": 60, "price_tinybar": 100000 }
+      }
+    },
+    {
       "id": "uniswap-v4-base-3",
       "description": "Uniswap v4 pools on Base",
       "subgraph_id": "Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj",

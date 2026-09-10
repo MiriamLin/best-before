@@ -7,6 +7,7 @@
       "chain": "base",
       "rpc_url": "https://mainnet.base.org",
       "tiers": {
+        "strict": { "max_age_seconds": 1, "price_tinybar": 2000000 },
         "realtime": { "max_age_seconds": 5, "price_tinybar": 1000000 },
         "delayed": { "max_age_seconds": 60, "price_tinybar": 100000 }
       }
@@ -18,6 +19,7 @@
       "chain": "base",
       "rpc_url": "https://mainnet.base.org",
       "tiers": {
+        "strict": { "max_age_seconds": 1, "price_tinybar": 2000000 },
         "realtime": { "max_age_seconds": 5, "price_tinybar": 1000000 },
         "delayed": { "max_age_seconds": 60, "price_tinybar": 100000 }
       }

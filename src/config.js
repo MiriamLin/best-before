@@ -44,6 +44,30 @@ function requireSupportedChain(value, label) {
   }
 }
 
+function requireEvmAddress(value, label) {
+  requireNonEmptyString(value, label);
+  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) {
+    fail(`${label} must be a 20-byte EVM address, got ${JSON.stringify(value)}`);
+  }
+}
+
+function validatePriceFeed(priceFeed, label) {
+  if (priceFeed == null) {
+    return;
+  }
+  if (typeof priceFeed !== "object" || Array.isArray(priceFeed)) {
+    fail(`${label} must be an object`);
+  }
+
+  requireEvmAddress(priceFeed.pool_id, `${label}.pool_id`);
+  requireNonEmptyString(priceFeed.base_symbol, `${label}.base_symbol`);
+  requireNonEmptyString(priceFeed.quote_symbol, `${label}.quote_symbol`);
+
+  if (priceFeed.base_symbol === priceFeed.quote_symbol) {
+    fail(`${label} base_symbol and quote_symbol must differ`);
+  }
+}
+
 function validateTiers(tiers, label) {
   if (typeof tiers !== "object" || tiers === null || Array.isArray(tiers)) {
     fail(`${label} must be an object of tier definitions`);
@@ -93,6 +117,7 @@ export function loadConfig() {
     requireNonEmptyString(source.subgraph_id, `${label}.subgraph_id`);
     requireSupportedChain(source.chain, `${label}.chain`);
     requireHttpsUrl(source.rpc_url, `${label}.rpc_url`);
+    validatePriceFeed(source.price_feed, `${label}.price_feed`);
     validateTiers(source.tiers, `${label}.tiers`);
 
     return {

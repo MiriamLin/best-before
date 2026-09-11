@@ -1,5 +1,5 @@
 import { fetchChainHead } from "./rpc.js";
-import { fetchSubgraphMeta } from "./subgraph.js";
+import { fetchSubgraphSnapshot } from "./subgraph.js";
 
 const AVERAGE_BLOCK_TIME_SECONDS = {
   base: 2,
@@ -33,11 +33,12 @@ function calculateAge(source, timestamp, lagBlocks) {
   };
 }
 
-export async function measureFreshness(source) {
-  const [meta, chainHead] = await Promise.all([
-    fetchSubgraphMeta(source),
+export async function measureSnapshot(source) {
+  const [snapshot, chainHead] = await Promise.all([
+    fetchSubgraphSnapshot(source),
     fetchChainHead(source),
   ]);
+  const { meta, price } = snapshot;
 
   const deliveredBlock = meta.block.number;
   const lagBlocks = chainHead - deliveredBlock;
@@ -67,5 +68,9 @@ export async function measureFreshness(source) {
     age_is_estimated: ageIsEstimated,
     deployment: meta.deployment,
     has_indexing_errors: meta.hasIndexingErrors,
+    pool_id: price.pool_id,
+    pair: price.pair,
+    price: price.price,
+    price_direction: price.price_direction,
   };
 }

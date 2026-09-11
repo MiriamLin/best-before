@@ -6,7 +6,7 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { Hono } from "hono";
 
 import { loadConfig } from "./config.js";
-import { measureFreshness } from "./freshness.js";
+import { measureSnapshot } from "./freshness.js";
 import { submitReceipt, waitForPendingReceiptWrites } from "./hcs.js";
 import { buildReceipt, REFUND_FAILURE_REASON_PROCESSING_FAILED } from "./receipt.js";
 import { refundBuyer } from "./refund.js";
@@ -202,9 +202,9 @@ app.get("/price", async (c) => {
     );
   }
 
-  let freshness;
+  let snapshot;
   try {
-    freshness = await measureFreshness(source);
+    snapshot = await measureSnapshot(source);
   } catch (error) {
     console.error(`[price] ${source.id}: ${error.message}`);
     return c.json(
@@ -216,7 +216,7 @@ app.get("/price", async (c) => {
     );
   }
 
-  const tierEvaluation = evaluateTier(tierName, tier, freshness);
+  const tierEvaluation = evaluateTier(tierName, tier, snapshot);
   const settledPayment = takeSettledPayment(c);
   if (settledPayment == null) {
     console.error(`[payment] ${source.id}: settled payment data is unavailable`);
@@ -245,7 +245,7 @@ app.get("/price", async (c) => {
         buyerAccountId: settledPayment.payer,
         tierName,
         tier,
-        freshness,
+        freshness: snapshot,
       });
 
       refundTinybar = refund.refund_tinybar;
@@ -264,7 +264,7 @@ app.get("/price", async (c) => {
     requestId: `req-${randomUUID()}`,
     ts: new Date().toISOString(),
     source,
-    freshness,
+    freshness: snapshot,
     tierEvaluation,
     paidTinybar,
     paidAmountSource: "PAYMENT_REQUIREMENTS",
@@ -301,7 +301,12 @@ app.get("/price", async (c) => {
 
   return c.json({
     data: receipt.delivery_status === "DELIVERED"
-      ? { price: null, status: "PLACEHOLDER" }
+      ? {
+        pool_id: receipt.pool_id,
+        pair: receipt.pair,
+        price: receipt.price,
+        price_direction: receipt.price_direction,
+      }
       : null,
     receipt,
     receipt_queued: receiptQueued,

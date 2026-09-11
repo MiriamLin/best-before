@@ -30,6 +30,25 @@ function requirePaidAmountSource(value) {
   }
 }
 
+function requireNonEmptyString(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(
+      `[receipt] ${label} must be a non-empty string, got ${JSON.stringify(value)}`,
+    );
+  }
+}
+
+function validatePriceSnapshot(freshness) {
+  requireNonEmptyString(freshness.pool_id, "freshness.pool_id");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(freshness.pool_id)) {
+    throw new Error("[receipt] freshness.pool_id must be a 20-byte EVM address");
+  }
+
+  requireNonEmptyString(freshness.pair, "freshness.pair");
+  requireNonEmptyString(freshness.price, "freshness.price");
+  requireNonEmptyString(freshness.price_direction, "freshness.price_direction");
+}
+
 function validateRefund({
   verdict,
   paidTinybar,
@@ -94,6 +113,7 @@ export function buildReceipt({
   requireNonNegativeSafeInteger(paidTinybar, "paidTinybar");
   requireNonNegativeSafeInteger(refundTinybar, "refundTinybar");
   requirePaidAmountSource(paidAmountSource);
+  validatePriceSnapshot(freshness);
 
   validateRefund({
     verdict: tierEvaluation.verdict,
@@ -116,6 +136,10 @@ export function buildReceipt({
     age_is_estimated: freshness.age_is_estimated,
     deployment: freshness.deployment,
     has_indexing_errors: freshness.has_indexing_errors,
+    pool_id: freshness.pool_id,
+    pair: freshness.pair,
+    price: freshness.price,
+    price_direction: freshness.price_direction,
     tier: tierEvaluation.tier,
     verdict: tierEvaluation.verdict,
     failure_reasons: [...tierEvaluation.failure_reasons],

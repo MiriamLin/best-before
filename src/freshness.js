@@ -33,10 +33,10 @@ function calculateAge(source, timestamp, lagBlocks) {
   };
 }
 
-export async function measureSnapshot(source) {
+export async function measureSnapshot(source, { timeoutMs } = {}) {
   const [snapshot, chainHead] = await Promise.all([
-    fetchSubgraphSnapshot(source),
-    fetchChainHead(source),
+    fetchSubgraphSnapshot(source, { timeoutMs }),
+    fetchChainHead(source, { timeoutMs }),
   ]);
   const { meta, price } = snapshot;
 

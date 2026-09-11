@@ -10,12 +10,14 @@ import { measureSnapshot } from "./freshness.js";
 import { submitReceipt, waitForPendingReceiptWrites } from "./hcs.js";
 import { buildReceipt, REFUND_FAILURE_REASON_PROCESSING_FAILED } from "./receipt.js";
 import { refundBuyer } from "./refund.js";
-import { evaluateTier } from "./tiers.js";
+import { evaluateTier, evaluateTiers } from "./tiers.js";
 
 const PORT = 3000;
 const HEDERA_TESTNET = "hedera:testnet";
 const BLOCKY402_URL = "https://api.testnet.blocky402.com";
 const SETTLED_PAYMENT_TTL_MS = 5 * 60 * 1000;
+const DISCLOSURE_CACHE_TTL_MS = 5_000;
+const DISCLOSURE_TIMEOUT_MS = 2_000;
 const { sources } = loadConfig();
 
 function requireEnvironmentVariable(name) {
@@ -48,6 +50,93 @@ function priceForPayment(context) {
 
 const paymentRecipient = requireEnvironmentVariable("HEDERA_ACCOUNT_ID");
 const settledPaymentRequirements = new Map();
+const disclosureSnapshots = new Map();
+
+function buildUnavailableDisclosure() {
+  return {
+    contentType: "application/json",
+    body: {
+      freshness_disclosure: {
+        status: "UNAVAILABLE",
+        disclaimer: "Pre-payment freshness is unavailable. Freshness is measured again after payment; only that measurement is covered by the SLA.",
+      },
+    },
+  };
+}
+
+function getDisclosureSnapshot(source) {
+  const now = Date.now();
+  const cached = disclosureSnapshots.get(source.id);
+  if (cached != null && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = measureSnapshot(source, {
+    timeoutMs: DISCLOSURE_TIMEOUT_MS,
+  });
+  disclosureSnapshots.set(source.id, {
+    promise,
+    expiresAt: now + DISCLOSURE_CACHE_TTL_MS,
+  });
+
+  promise.catch(() => {
+    if (disclosureSnapshots.get(source.id)?.promise === promise) {
+      disclosureSnapshots.delete(source.id);
+    }
+  });
+
+  return promise;
+}
+
+function buildTierDisclosure(source, snapshot) {
+  const evaluations = evaluateTiers(source.tiers, snapshot);
+  const evaluationsByTier = new Map(
+    [...evaluations.passing_tiers, ...evaluations.failing_tiers]
+      .map((evaluation) => [evaluation.tier, evaluation]),
+  );
+
+  return Object.entries(source.tiers).map(([name, tier]) => {
+    const evaluation = evaluationsByTier.get(name);
+    return {
+      name,
+      max_age_seconds: tier.max_age_seconds,
+      price_tinybar: tier.price_tinybar,
+      available: evaluation.verdict === "PASS",
+      failure_reasons: [...evaluation.failure_reasons],
+    };
+  });
+}
+
+async function buildUnpaidResponseBody(context) {
+  const sourceId = context.adapter.getQueryParam("source");
+  if (typeof sourceId !== "string") {
+    return buildUnavailableDisclosure();
+  }
+
+  const source = sources.find((candidate) => candidate.id === sourceId);
+  if (source == null) {
+    return buildUnavailableDisclosure();
+  }
+
+  try {
+    const snapshot = await getDisclosureSnapshot(source);
+    return {
+      contentType: "application/json",
+      body: {
+        freshness_disclosure: {
+          status: "AVAILABLE",
+          age_seconds: snapshot.age_seconds,
+          lag_blocks: snapshot.lag_blocks,
+          tiers: buildTierDisclosure(source, snapshot),
+          disclaimer: "This is a pre-payment snapshot, not an SLA guarantee. Freshness is measured again after payment; only that measurement is covered by the SLA.",
+        },
+      },
+    };
+  } catch (error) {
+    console.error(`[disclosure] ${source.id}: ${error.message}`);
+    return buildUnavailableDisclosure();
+  }
+}
 
 function rememberSettledPayment(paymentHeader, payment) {
   const previous = settledPaymentRequirements.get(paymentHeader);
@@ -169,6 +258,7 @@ app.use(paymentMiddleware(
       },
       description: "Freshness-guaranteed on-chain price data",
       mimeType: "application/json",
+      unpaidResponseBody: buildUnpaidResponseBody,
     },
   },
   resourceServer,

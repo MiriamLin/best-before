@@ -35,7 +35,7 @@ function requireNonEmptyString(value, label) {
   }
 }
 
-export async function fetchSubgraphSnapshot(source) {
+export async function fetchSubgraphSnapshot(source, { timeoutMs } = {}) {
   const priceFeed = requireConfiguredPriceFeed(source);
   const json = await postJson(
     source.gateway_url,
@@ -43,7 +43,7 @@ export async function fetchSubgraphSnapshot(source) {
       query: SNAPSHOT_QUERY,
       variables: { poolId: priceFeed.pool_id },
     },
-    { label: `subgraph ${source.id}` },
+    { label: `subgraph ${source.id}`, timeoutMs },
   );
 
   if (Array.isArray(json.errors) && json.errors.length > 0) {

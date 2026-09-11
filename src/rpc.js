@@ -17,7 +17,7 @@ function parseBlockNumber(result, label) {
   return blockNumber;
 }
 
-export async function fetchChainHead(source) {
+export async function fetchChainHead(source, { timeoutMs } = {}) {
   const json = await postJson(
     source.rpc_url,
     {
@@ -26,7 +26,7 @@ export async function fetchChainHead(source) {
       method: "eth_blockNumber",
       params: [],
     },
-    { label: source.rpc_url },
+    { label: source.rpc_url, timeoutMs },
   );
 
   if (json.error != null) {

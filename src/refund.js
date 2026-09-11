@@ -26,6 +26,12 @@ function requirePositiveSafeInteger(value, label) {
   }
 }
 
+function requireNonEmptyString(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`[refund] ${label} must be a non-empty string`);
+  }
+}
+
 function requireTransactionMemoWithinLimit(memo) {
   const byteLength = Buffer.byteLength(memo, "utf8");
 
@@ -38,7 +44,6 @@ function requireTransactionMemoWithinLimit(memo) {
 
 const serviceAccountId = requireEnvironmentVariable("HEDERA_ACCOUNT_ID");
 const servicePrivateKey = requireEnvironmentVariable("HEDERA_PRIVATE_KEY");
-const buyerAccountId = requireEnvironmentVariable("BUYER_ACCOUNT_ID");
 
 const client = Client.forTestnet();
 client.setOperator(
@@ -46,7 +51,14 @@ client.setOperator(
   PrivateKey.fromStringECDSA(servicePrivateKey),
 );
 
-export async function refundBuyer({ tierName, tier, freshness }) {
+export async function refundBuyer({
+  buyerAccountId,
+  tierName,
+  tier,
+  freshness,
+}) {
+  requireNonEmptyString(buyerAccountId, "buyerAccountId");
+
   const refundTinybar = tier.price_tinybar;
   requirePositiveSafeInteger(refundTinybar, "tier.price_tinybar");
 

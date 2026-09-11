@@ -11,11 +11,22 @@ const PUBLIC_REFUND_FAILURE_REASONS = new Set([
   REFUND_FAILURE_REASON_PROCESSING_FAILED,
 ]);
 
+const PAID_AMOUNT_SOURCES = new Set([
+  "PAYMENT_REQUIREMENTS",
+  "SETTLEMENT_PROOF",
+]);
+
 function requireNonNegativeSafeInteger(value, label) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(
       `[receipt] ${label} must be a non-negative safe integer, got ${JSON.stringify(value)}`,
     );
+  }
+}
+
+function requirePaidAmountSource(value) {
+  if (!PAID_AMOUNT_SOURCES.has(value)) {
+    throw new Error("[receipt] paidAmountSource must be a supported source");
   }
 }
 
@@ -74,6 +85,7 @@ export function buildReceipt({
   freshness,
   tierEvaluation,
   paidTinybar,
+  paidAmountSource,
   refundTinybar,
   refundStatus,
   refundTxId,
@@ -81,6 +93,7 @@ export function buildReceipt({
 }) {
   requireNonNegativeSafeInteger(paidTinybar, "paidTinybar");
   requireNonNegativeSafeInteger(refundTinybar, "refundTinybar");
+  requirePaidAmountSource(paidAmountSource);
 
   validateRefund({
     verdict: tierEvaluation.verdict,
@@ -108,6 +121,7 @@ export function buildReceipt({
     failure_reasons: [...tierEvaluation.failure_reasons],
     tier_sla_seconds: tierEvaluation.tier_sla_seconds,
     paid_tinybar: paidTinybar,
+    paid_amount_source: paidAmountSource,
     refund_tinybar: refundTinybar,
     refund_status: refundStatus,
     refund_tx_id: refundTxId,

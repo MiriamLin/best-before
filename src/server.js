@@ -12,7 +12,7 @@ import { buildReceipt, REFUND_FAILURE_REASON_PROCESSING_FAILED } from "./receipt
 import { refundBuyer } from "./refund.js";
 import { evaluateTier, evaluateTiers } from "./tiers.js";
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const HEDERA_TESTNET = "hedera:testnet";
 const BLOCKY402_URL = "https://api.testnet.blocky402.com";
 const SETTLED_PAYMENT_TTL_MS = 5 * 60 * 1000;
@@ -213,6 +213,8 @@ function takeSettledPayment(c) {
 }
 
 export const app = new Hono();
+
+app.get("/health", (c) => c.json({ status: "ok" }));
 
 app.use("/price", async (c, next) => {
   const sourceId = c.req.query("source");
@@ -476,8 +478,8 @@ app.get("/price", async (c) => {
 });
 
 const server = serve(
-  { fetch: app.fetch, port: PORT },
-  (info) => console.log(`Best Before listening on http://localhost:${info.port}`),
+  { fetch: app.fetch, hostname: "0.0.0.0", port: PORT },
+  (info) => console.log(`Best Before listening on port ${info.port}`),
 );
 
 let shuttingDown = false;

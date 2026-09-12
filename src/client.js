@@ -1,6 +1,6 @@
 import { createPaidFetch } from "./payment-client.js";
 
-const PRICE_API_URL = "http://localhost:3000/price";
+const BASE = process.env.BEST_BEFORE_URL ?? "http://localhost:3000";
 
 const [sourceId, tierName] = process.argv.slice(2);
 if (typeof sourceId !== "string" || typeof tierName !== "string") {
@@ -8,7 +8,7 @@ if (typeof sourceId !== "string" || typeof tierName !== "string") {
 }
 
 const fetchWithPayment = createPaidFetch();
-const url = new URL(PRICE_API_URL);
+const url = new URL("/price", BASE);
 url.searchParams.set("source", sourceId);
 url.searchParams.set("tier", tierName);
 

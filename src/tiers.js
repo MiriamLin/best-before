@@ -4,7 +4,7 @@ export function evaluateTier(tierName, tier, freshness) {
   if (freshness.has_indexing_errors) {
     failureReasons.push("INDEXING_ERRORS");
   }
-  if (freshness.age_seconds > tier.max_age_seconds) {
+  if (freshness.age_seconds >= tier.max_age_seconds) {
     failureReasons.push("AGE_EXCEEDS_SLA");
   }
 

@@ -23,6 +23,12 @@ function requirePositiveNumber(value, label) {
   }
 }
 
+function requireNonNegativeInteger(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    fail(`${label} must be a non-negative integer, got ${JSON.stringify(value)}`);
+  }
+}
+
 function requireHttpsUrl(value, label) {
   requireNonEmptyString(value, label);
 
@@ -83,7 +89,7 @@ function validateTiers(tiers, label) {
     if (typeof tier !== "object" || tier === null) {
       fail(`${label}.${name} must be an object`);
     }
-    requirePositiveNumber(tier.max_age_seconds, `${label}.${name}.max_age_seconds`);
+    requireNonNegativeInteger(tier.max_age_seconds, `${label}.${name}.max_age_seconds`);
     requirePositiveNumber(tier.price_tinybar, `${label}.${name}.price_tinybar`);
   }
 }

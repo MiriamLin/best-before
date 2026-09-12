@@ -1,0 +1,901 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Best Before API",
+    "version": "1.0.0",
+    "description": "x402-gated on-chain price data with freshness guarantees, automatic refunds for non-delivery, and Hedera Consensus Service audit receipts."
+  },
+  "servers": [
+    {
+      "url": "https://best-before-production.up.railway.app",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Check service health",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "The service is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/price": {
+      "get": {
+        "summary": "Purchase freshness-guaranteed price data",
+        "description": "This endpoint uses x402 exact payments on Hedera testnet. An unpaid request returns HTTP 402 with an advisory freshness disclosure. Freshness is measured again after payment; only the post-payment measurement is covered by the SLA. A tier passes only when age_seconds is strictly less than its max_age_seconds.",
+        "operationId": "getPrice",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "description": "Configured source ID.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "aerodrome-base-full"
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": true,
+            "description": "Configured freshness tier.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "realtime"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payment settled and the service either delivered a price or refused delivery because the measured snapshot missed the purchased SLA.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeliveredPriceResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RefusedPriceResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The source or tier is not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UnknownSourceResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnknownTierResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment is required. The freshness disclosure is advisory and does not replace the post-payment SLA measurement.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRequiredResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The service could not complete post-payment processing. Upstream snapshot failures include an UNDELIVERED receipt and a full refund attempt. Settlement metadata failures cannot safely claim a refund.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/UpstreamFailureResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SettlementDataUnavailableResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "ok",
+            "description": "Minimal liveness signal. No configuration or secret values are exposed."
+          }
+        }
+      },
+      "PriceData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pool_id",
+          "pair",
+          "price",
+          "price_direction"
+        ],
+        "properties": {
+          "pool_id": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "description": "Pool ID returned by the measured subgraph snapshot."
+          },
+          "pair": {
+            "type": "string",
+            "description": "Human-readable pair label returned by the measured subgraph snapshot.",
+            "example": "WETH/USDC"
+          },
+          "price": {
+            "type": "string",
+            "description": "Decimal price string returned by the subgraph. It remains a string to preserve BigDecimal precision.",
+            "example": "2576.212444475977980702686446427656"
+          },
+          "price_direction": {
+            "type": "string",
+            "description": "Direction of the quoted price.",
+            "example": "WETH_IN_USDC"
+          }
+        }
+      },
+      "TierAvailability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "max_age_seconds",
+          "price_tinybar",
+          "available",
+          "failure_reasons"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Configured tier name."
+          },
+          "max_age_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Exclusive upper bound for snapshot age. A tier passes only when age_seconds is strictly less than max_age_seconds; 0 is therefore a guaranteed non-delivery tier."
+          },
+          "price_tinybar": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Exact HBAR payment amount in tinybar."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Whether the advisory pre-payment snapshot currently passes this tier."
+          },
+          "failure_reasons": {
+            "type": "array",
+            "description": "Reasons the advisory pre-payment snapshot does not currently pass this tier.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "AGE_EXCEEDS_SLA",
+                "INDEXING_ERRORS"
+              ]
+            }
+          }
+        }
+      },
+      "FreshnessDisclosure": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AvailableFreshnessDisclosure"
+          },
+          {
+            "$ref": "#/components/schemas/UnavailableFreshnessDisclosure"
+          }
+        ]
+      },
+      "AvailableFreshnessDisclosure": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "age_seconds",
+          "lag_blocks",
+          "tiers",
+          "disclaimer"
+        ],
+        "properties": {
+          "status": {
+            "const": "AVAILABLE"
+          },
+          "age_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Age of the advisory pre-payment snapshot in seconds."
+          },
+          "lag_blocks": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Block distance between the advisory subgraph snapshot and the chain head."
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TierAvailability"
+            }
+          },
+          "disclaimer": {
+            "type": "string",
+            "description": "Explains that only the post-payment measurement is covered by the SLA."
+          }
+        }
+      },
+      "UnavailableFreshnessDisclosure": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "disclaimer"
+        ],
+        "properties": {
+          "status": {
+            "const": "UNAVAILABLE"
+          },
+          "disclaimer": {
+            "type": "string",
+            "description": "Explains that pre-payment freshness could not be obtained and that any later payment measurement is separate."
+          }
+        }
+      },
+      "PaymentRequiredResponse": {
+        "type": "object",
+        "required": [
+          "freshness_disclosure"
+        ],
+        "properties": {
+          "freshness_disclosure": {
+            "$ref": "#/components/schemas/FreshnessDisclosure"
+          }
+        },
+        "additionalProperties": true,
+        "description": "The x402 middleware can include additional payment requirement fields."
+      },
+      "Receipt": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DeliveredReceipt"
+          },
+          {
+            "$ref": "#/components/schemas/RefusedReceipt"
+          },
+          {
+            "$ref": "#/components/schemas/UndeliveredReceipt"
+          }
+        ],
+        "description": "A self-verifying delivery receipt. The same receipt object is returned by HTTP and submitted to HCS."
+      },
+      "ReceiptBase": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "v",
+          "request_id",
+          "source",
+          "chain",
+          "snapshot_status",
+          "delivered_block",
+          "chain_head",
+          "lag_blocks",
+          "age_seconds",
+          "age_is_estimated",
+          "deployment",
+          "has_indexing_errors",
+          "pool_id",
+          "pair",
+          "price",
+          "price_direction",
+          "tier",
+          "verdict",
+          "failure_reasons",
+          "tier_sla_seconds",
+          "paid_tinybar",
+          "paid_amount_source",
+          "refund_tinybar",
+          "refund_status",
+          "refund_tx_id",
+          "refund_failure_reason",
+          "delivery_status",
+          "ts"
+        ],
+        "properties": {
+          "v": {
+            "const": 1,
+            "description": "Receipt schema version."
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Unique request identifier used to correlate HTTP, server logs, and HCS."
+          },
+          "source": {
+            "type": "string",
+            "description": "Configured source ID."
+          },
+          "chain": {
+            "type": "string",
+            "description": "Chain used for the subgraph and RPC comparison.",
+            "example": "base"
+          },
+          "snapshot_status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE"
+            ],
+            "description": "AVAILABLE means a complete post-payment snapshot was measured. UNAVAILABLE means no freshness or price data was obtained; all snapshot-derived fields are then null."
+          },
+          "delivered_block": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Subgraph block number in the measured snapshot, or null when no snapshot was available."
+          },
+          "chain_head": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "RPC chain head used for the measured snapshot, or null when no snapshot was available."
+          },
+          "lag_blocks": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "chain_head minus delivered_block, or null when no snapshot was available."
+          },
+          "age_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Measured or estimated snapshot age in seconds, or null when no snapshot was available."
+          },
+          "age_is_estimated": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "True when age_seconds was estimated from block lag because the graph-node block timestamp was null."
+          },
+          "deployment": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The subgraph deployment ID reported by _meta, or null when no snapshot was available."
+          },
+          "has_indexing_errors": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "The _meta.hasIndexingErrors value, or null when no snapshot was available."
+          },
+          "pool_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pool ID returned by the measured subgraph snapshot, or null when no snapshot was available."
+          },
+          "pair": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pair returned by the measured subgraph snapshot, or null when no snapshot was available."
+          },
+          "price": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BigDecimal price string returned by the measured subgraph snapshot, or null when no snapshot was available."
+          },
+          "price_direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Direction of the measured price, or null when no snapshot was available."
+          },
+          "tier": {
+            "type": "string",
+            "description": "Tier purchased by the buyer."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNAVAILABLE"
+            ],
+            "description": "PASS means the complete measured snapshot met the purchased SLA. FAIL means the snapshot was measured but did not meet it. UNAVAILABLE means the service could not obtain a complete snapshot and did not perform SLA evaluation."
+          },
+          "failure_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "AGE_EXCEEDS_SLA",
+                "INDEXING_ERRORS",
+                "UPSTREAM_UNAVAILABLE"
+              ]
+            },
+            "description": "Reasons for FAIL or UNAVAILABLE. PASS has an empty array. UNAVAILABLE has exactly UPSTREAM_UNAVAILABLE."
+          },
+          "tier_sla_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Exclusive upper bound promised by the purchased tier. The receipt passes only when age_seconds is strictly less than this value."
+          },
+          "paid_tinybar": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Exact amount charged for this request, in tinybar."
+          },
+          "paid_amount_source": {
+            "type": "string",
+            "enum": [
+              "PAYMENT_REQUIREMENTS",
+              "SETTLEMENT_PROOF"
+            ],
+            "description": "Whether paid_tinybar was inferred from exact payment requirements or directly observed in a settlement proof."
+          },
+          "refund_tinybar": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Refund amount or, when refund_status is FAILED, the full outstanding refund obligation. For paid non-deliveries it must equal paid_tinybar."
+          },
+          "refund_status": {
+            "type": "string",
+            "enum": [
+              "NOT_APPLICABLE",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "description": "NOT_APPLICABLE is valid only for a delivered PASS. COMPLETED has an on-chain refund transaction ID. FAILED means a refund was required but did not complete and needs manual review."
+          },
+          "refund_tx_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Hedera refund transaction ID when refund_status is COMPLETED; otherwise null."
+          },
+          "refund_failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Safe buyer-facing explanation when refund_status is FAILED; otherwise null."
+          },
+          "delivery_status": {
+            "type": "string",
+            "enum": [
+              "DELIVERED",
+              "REFUSED",
+              "UNDELIVERED"
+            ],
+            "description": "DELIVERED means a price was supplied. REFUSED means freshness was measured but did not meet the SLA. UNDELIVERED means no complete snapshot could be measured."
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Receipt creation time in ISO 8601 UTC."
+          }
+        }
+      },
+      "AvailableSnapshotFields": {
+        "type": "object",
+        "properties": {
+          "snapshot_status": {
+            "const": "AVAILABLE"
+          },
+          "delivered_block": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "chain_head": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lag_blocks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "age_seconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "age_is_estimated": {
+            "type": "boolean"
+          },
+          "deployment": {
+            "type": "string"
+          },
+          "has_indexing_errors": {
+            "type": "boolean"
+          },
+          "pool_id": {
+            "type": "string"
+          },
+          "pair": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string"
+          },
+          "price_direction": {
+            "type": "string"
+          }
+        }
+      },
+      "UnavailableSnapshotFields": {
+        "type": "object",
+        "properties": {
+          "snapshot_status": {
+            "const": "UNAVAILABLE"
+          },
+          "delivered_block": {
+            "type": "null"
+          },
+          "chain_head": {
+            "type": "null"
+          },
+          "lag_blocks": {
+            "type": "null"
+          },
+          "age_seconds": {
+            "type": "null"
+          },
+          "age_is_estimated": {
+            "type": "null"
+          },
+          "deployment": {
+            "type": "null"
+          },
+          "has_indexing_errors": {
+            "type": "null"
+          },
+          "pool_id": {
+            "type": "null"
+          },
+          "pair": {
+            "type": "null"
+          },
+          "price": {
+            "type": "null"
+          },
+          "price_direction": {
+            "type": "null"
+          }
+        }
+      },
+      "CompletedRefund": {
+        "type": "object",
+        "properties": {
+          "refund_status": {
+            "const": "COMPLETED"
+          },
+          "refund_tx_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "refund_failure_reason": {
+            "type": "null"
+          }
+        }
+      },
+      "FailedRefund": {
+        "type": "object",
+        "properties": {
+          "refund_status": {
+            "const": "FAILED"
+          },
+          "refund_tx_id": {
+            "type": "null"
+          },
+          "refund_failure_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "DeliveredReceipt": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReceiptBase"
+          },
+          {
+            "$ref": "#/components/schemas/AvailableSnapshotFields"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "const": "PASS"
+              },
+              "failure_reasons": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "refund_tinybar": {
+                "const": 0
+              },
+              "refund_status": {
+                "const": "NOT_APPLICABLE"
+              },
+              "refund_tx_id": {
+                "type": "null"
+              },
+              "refund_failure_reason": {
+                "type": "null"
+              },
+              "delivery_status": {
+                "const": "DELIVERED"
+              }
+            }
+          }
+        ]
+      },
+      "RefusedReceipt": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReceiptBase"
+          },
+          {
+            "$ref": "#/components/schemas/AvailableSnapshotFields"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "const": "FAIL"
+              },
+              "failure_reasons": {
+                "type": "array",
+                "minItems": 1
+              },
+              "refund_tinybar": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Must equal paid_tinybar."
+              },
+              "delivery_status": {
+                "const": "REFUSED"
+              }
+            }
+          },
+          {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CompletedRefund"
+              },
+              {
+                "$ref": "#/components/schemas/FailedRefund"
+              }
+            ]
+          }
+        ]
+      },
+      "UndeliveredReceipt": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReceiptBase"
+          },
+          {
+            "$ref": "#/components/schemas/UnavailableSnapshotFields"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "const": "UNAVAILABLE"
+              },
+              "failure_reasons": {
+                "type": "array",
+                "items": {
+                  "const": "UPSTREAM_UNAVAILABLE"
+                },
+                "minItems": 1,
+                "maxItems": 1
+              },
+              "refund_tinybar": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Must equal paid_tinybar."
+              },
+              "delivery_status": {
+                "const": "UNDELIVERED"
+              }
+            }
+          },
+          {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CompletedRefund"
+              },
+              {
+                "$ref": "#/components/schemas/FailedRefund"
+              }
+            ]
+          }
+        ]
+      },
+      "DeliveredPriceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data",
+          "receipt",
+          "receipt_queued"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PriceData"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/DeliveredReceipt"
+          },
+          "receipt_queued": {
+            "type": "boolean",
+            "description": "Whether HCS receipt submission was accepted. Delivered receipts are written asynchronously."
+          }
+        }
+      },
+      "RefusedPriceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data",
+          "receipt",
+          "receipt_queued"
+        ],
+        "properties": {
+          "data": {
+            "type": "null",
+            "description": "No price is delivered when the measured snapshot misses the SLA."
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/RefusedReceipt"
+          },
+          "receipt_queued": {
+            "type": "boolean",
+            "description": "True only after the refund receipt reaches HCS consensus."
+          }
+        }
+      },
+      "UpstreamFailureResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "source",
+          "data",
+          "receipt",
+          "receipt_queued"
+        ],
+        "properties": {
+          "error": {
+            "const": "Upstream freshness check failed"
+          },
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "null"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/UndeliveredReceipt"
+          },
+          "receipt_queued": {
+            "type": "boolean",
+            "description": "True only after the refund receipt reaches HCS consensus."
+          }
+        }
+      },
+      "SettlementDataUnavailableResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "source"
+        ],
+        "properties": {
+          "error": {
+            "const": "Settled payment data is unavailable"
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      },
+      "UnknownSourceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "available_sources"
+        ],
+        "properties": {
+          "error": {
+            "const": "Unknown source"
+          },
+          "available_sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UnknownTierResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "source",
+          "available_tiers"
+        ],
+        "properties": {
+          "error": {
+            "const": "Unknown tier"
+          },
+          "source": {
+            "type": "string"
+          },
+          "available_tiers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

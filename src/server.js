@@ -292,24 +292,13 @@ app.get("/price", async (c) => {
     );
   }
 
-  let snapshot;
-  try {
-    snapshot = await measureSnapshot(source);
-  } catch (error) {
-    console.error(`[price] ${source.id}: ${error.message}`);
-    return c.json(
-      {
-        error: "Upstream freshness check failed",
-        source: source.id,
-      },
-      502,
-    );
-  }
-
-  const tierEvaluation = evaluateTier(tierName, tier, snapshot);
+  const requestId = `req-${randomUUID()}`;
   const settledPayment = takeSettledPayment(c);
   if (settledPayment == null) {
-    console.error(`[payment] ${source.id}: settled payment data is unavailable`);
+    console.error(
+      `[payment] request_id=${requestId} source=${source.id} tier=${tierName}: `
+      + "settled payment data is unavailable; refund cannot be initiated",
+    );
     return c.json(
       {
         error: "Settled payment data is unavailable",
@@ -319,6 +308,87 @@ app.get("/price", async (c) => {
     );
   }
 
+  let snapshot;
+  try {
+    snapshot = await measureSnapshot(source);
+  } catch (error) {
+    console.error(`[price] ${source.id}: ${error.message}`);
+
+    const tierEvaluation = {
+      tier: tierName,
+      verdict: "UNAVAILABLE",
+      failure_reasons: ["UPSTREAM_UNAVAILABLE"],
+      tier_sla_seconds: tier.max_age_seconds,
+    };
+    const paidTinybar = settledPayment.paidTinybar;
+    let refundTinybar = paidTinybar;
+    let refundStatus = "FAILED";
+    let refundTxId = null;
+    let refundFailureReason = REFUND_FAILURE_REASON_PROCESSING_FAILED;
+
+    try {
+      if (typeof settledPayment.payer !== "string" || settledPayment.payer === "") {
+        throw new Error("[payment] settled payer is unavailable for refund");
+      }
+
+      const refund = await refundBuyer({
+        buyerAccountId: settledPayment.payer,
+        tierName,
+        tier,
+        freshness: null,
+        refundTinybar: paidTinybar,
+      });
+
+      refundTinybar = refund.refund_tinybar;
+      refundStatus = "COMPLETED";
+      refundTxId = refund.refund_tx_id;
+      refundFailureReason = null;
+    } catch (refundError) {
+      console.error(`[refund] ${source.id}: ${refundError.message}`);
+    }
+
+    const receipt = buildReceipt({
+      requestId,
+      ts: new Date().toISOString(),
+      source,
+      snapshotStatus: "UNAVAILABLE",
+      freshness: null,
+      tierEvaluation,
+      paidTinybar,
+      paidAmountSource: "PAYMENT_REQUIREMENTS",
+      refundTinybar,
+      refundStatus,
+      refundTxId,
+      refundFailureReason,
+    });
+
+    let receiptQueued = false;
+    try {
+      await submitReceipt(receipt);
+      receiptQueued = true;
+    } catch (hcsError) {
+      console.error(
+        `[hcs] upstream failure receipt write failed: request_id=${receipt.request_id} `
+        + `source=${source.id} refund_status=${refundStatus} `
+        + `refund_tx_id=${refundTxId ?? "none"} `
+        + `paid_tinybar=${paidTinybar} refund_tinybar=${refundTinybar}: `
+        + `${hcsError.message}`,
+      );
+    }
+
+    return c.json(
+      {
+        error: "Upstream freshness check failed",
+        source: source.id,
+        data: null,
+        receipt,
+        receipt_queued: receiptQueued,
+      },
+      502,
+    );
+  }
+
+  const tierEvaluation = evaluateTier(tierName, tier, snapshot);
   const paidTinybar = settledPayment.paidTinybar;
   let refundTinybar = 0;
   let refundStatus = "NOT_APPLICABLE";
@@ -336,6 +406,7 @@ app.get("/price", async (c) => {
         tierName,
         tier,
         freshness: snapshot,
+        refundTinybar: paidTinybar,
       });
 
       refundTinybar = refund.refund_tinybar;
@@ -351,9 +422,10 @@ app.get("/price", async (c) => {
   }
 
   const receipt = buildReceipt({
-    requestId: `req-${randomUUID()}`,
+    requestId,
     ts: new Date().toISOString(),
     source,
+    snapshotStatus: "AVAILABLE",
     freshness: snapshot,
     tierEvaluation,
     paidTinybar,

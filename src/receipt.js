@@ -7,6 +7,19 @@ const REFUND_STATUSES = new Set([
   "FAILED",
 ]);
 
+const SNAPSHOT_STATUSES = new Set([
+  "AVAILABLE",
+  "UNAVAILABLE",
+]);
+
+const VERDICTS = new Set([
+  "PASS",
+  "FAIL",
+  "UNAVAILABLE",
+]);
+
+const UPSTREAM_UNAVAILABLE = "UPSTREAM_UNAVAILABLE";
+
 const PUBLIC_REFUND_FAILURE_REASONS = new Set([
   REFUND_FAILURE_REASON_PROCESSING_FAILED,
 ]);
@@ -49,6 +62,46 @@ function validatePriceSnapshot(freshness) {
   requireNonEmptyString(freshness.price_direction, "freshness.price_direction");
 }
 
+function validateSnapshot(snapshotStatus, freshness) {
+  if (!SNAPSHOT_STATUSES.has(snapshotStatus)) {
+    throw new Error("[receipt] snapshotStatus must be a supported status");
+  }
+
+  if (snapshotStatus === "AVAILABLE") {
+    if (freshness == null || typeof freshness !== "object") {
+      throw new Error("[receipt] AVAILABLE snapshots require freshness data");
+    }
+    validatePriceSnapshot(freshness);
+    return;
+  }
+
+  if (freshness !== null) {
+    throw new Error("[receipt] UNAVAILABLE snapshots must have null freshness data");
+  }
+}
+
+function validateTierEvaluation(snapshotStatus, tierEvaluation) {
+  if (!VERDICTS.has(tierEvaluation.verdict)) {
+    throw new Error("[receipt] tierEvaluation.verdict must be a supported verdict");
+  }
+
+  if (snapshotStatus === "AVAILABLE" && tierEvaluation.verdict === "UNAVAILABLE") {
+    throw new Error("[receipt] AVAILABLE snapshots cannot have an UNAVAILABLE verdict");
+  }
+
+  if (snapshotStatus === "UNAVAILABLE") {
+    if (
+      tierEvaluation.verdict !== "UNAVAILABLE"
+      || tierEvaluation.failure_reasons.length !== 1
+      || tierEvaluation.failure_reasons[0] !== UPSTREAM_UNAVAILABLE
+    ) {
+      throw new Error(
+        "[receipt] UNAVAILABLE snapshots require the UPSTREAM_UNAVAILABLE verdict reason",
+      );
+    }
+  }
+}
+
 function validateRefund({
   verdict,
   paidTinybar,
@@ -66,9 +119,9 @@ function validateRefund({
   }
 
   if (refundStatus === "NOT_APPLICABLE") {
-    if (paidTinybar > 0 && verdict === "FAIL") {
+    if (paidTinybar > 0 && verdict !== "PASS") {
       throw new Error(
-        "[receipt] paid failed deliveries require a completed or failed refund",
+        "[receipt] paid non-deliveries require a completed or failed refund",
       );
     }
 
@@ -78,8 +131,12 @@ function validateRefund({
     return;
   }
 
-  if (verdict !== "FAIL" || refundTinybar === 0) {
-    throw new Error("[receipt] refund attempts require a failed verdict and positive amount");
+  if (verdict === "PASS" || refundTinybar === 0) {
+    throw new Error("[receipt] refund attempts require a non-PASS verdict and positive amount");
+  }
+
+  if (paidTinybar > 0 && refundTinybar !== paidTinybar) {
+    throw new Error("[receipt] paid non-deliveries must refund the full paid amount");
   }
 
   if (refundStatus === "COMPLETED") {
@@ -101,6 +158,7 @@ export function buildReceipt({
   requestId,
   ts,
   source,
+  snapshotStatus,
   freshness,
   tierEvaluation,
   paidTinybar,
@@ -113,7 +171,8 @@ export function buildReceipt({
   requireNonNegativeSafeInteger(paidTinybar, "paidTinybar");
   requireNonNegativeSafeInteger(refundTinybar, "refundTinybar");
   requirePaidAmountSource(paidAmountSource);
-  validatePriceSnapshot(freshness);
+  validateSnapshot(snapshotStatus, freshness);
+  validateTierEvaluation(snapshotStatus, tierEvaluation);
 
   validateRefund({
     verdict: tierEvaluation.verdict,
@@ -124,22 +183,37 @@ export function buildReceipt({
     refundFailureReason,
   });
 
+  const snapshot = freshness ?? {
+    delivered_block: null,
+    chain_head: null,
+    lag_blocks: null,
+    age_seconds: null,
+    age_is_estimated: null,
+    deployment: null,
+    has_indexing_errors: null,
+    pool_id: null,
+    pair: null,
+    price: null,
+    price_direction: null,
+  };
+
   return {
     v: 1,
     request_id: requestId,
     source: source.id,
     chain: source.chain,
-    delivered_block: freshness.delivered_block,
-    chain_head: freshness.chain_head,
-    lag_blocks: freshness.lag_blocks,
-    age_seconds: freshness.age_seconds,
-    age_is_estimated: freshness.age_is_estimated,
-    deployment: freshness.deployment,
-    has_indexing_errors: freshness.has_indexing_errors,
-    pool_id: freshness.pool_id,
-    pair: freshness.pair,
-    price: freshness.price,
-    price_direction: freshness.price_direction,
+    snapshot_status: snapshotStatus,
+    delivered_block: snapshot.delivered_block,
+    chain_head: snapshot.chain_head,
+    lag_blocks: snapshot.lag_blocks,
+    age_seconds: snapshot.age_seconds,
+    age_is_estimated: snapshot.age_is_estimated,
+    deployment: snapshot.deployment,
+    has_indexing_errors: snapshot.has_indexing_errors,
+    pool_id: snapshot.pool_id,
+    pair: snapshot.pair,
+    price: snapshot.price,
+    price_direction: snapshot.price_direction,
     tier: tierEvaluation.tier,
     verdict: tierEvaluation.verdict,
     failure_reasons: [...tierEvaluation.failure_reasons],
@@ -150,7 +224,11 @@ export function buildReceipt({
     refund_status: refundStatus,
     refund_tx_id: refundTxId,
     refund_failure_reason: refundFailureReason,
-    delivery_status: tierEvaluation.verdict === "PASS" ? "DELIVERED" : "REFUSED",
+    delivery_status: tierEvaluation.verdict === "PASS"
+      ? "DELIVERED"
+      : tierEvaluation.verdict === "FAIL"
+        ? "REFUSED"
+        : "UNDELIVERED",
     ts,
   };
 }

@@ -56,17 +56,18 @@ export async function refundBuyer({
   tierName,
   tier,
   freshness,
+  refundTinybar,
 }) {
   requireNonEmptyString(buyerAccountId, "buyerAccountId");
+  requirePositiveSafeInteger(refundTinybar, "refundTinybar");
 
-  const refundTinybar = tier.price_tinybar;
-  requirePositiveSafeInteger(refundTinybar, "tier.price_tinybar");
-
-  const memo = (
-    `BestBefore refund: paid ${tierName}, `
-    + `delivered age=${freshness.age_seconds}s, `
-    + `sla=${tier.max_age_seconds}s`
-  );
+  const memo = freshness === null
+    ? `BestBefore refund: paid ${tierName}, upstream unavailable`
+    : (
+      `BestBefore refund: paid ${tierName}, `
+      + `delivered age=${freshness.age_seconds}s, `
+      + `sla=${tier.max_age_seconds}s`
+    );
   requireTransactionMemoWithinLimit(memo);
 
   const response = await new TransferTransaction()

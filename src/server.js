@@ -40,7 +40,9 @@ function priceForPayment(context) {
   }
 
   const source = sources.find((candidate) => candidate.id === sourceId);
-  const tier = source?.tiers[tierName];
+  const tier = source != null && Object.hasOwn(source.tiers, tierName)
+    ? source.tiers[tierName]
+    : null;
   if (tier == null) {
     throw new Error("[payment] source and tier must identify a configured price");
   }
@@ -283,7 +285,7 @@ app.use("/price", async (c, next) => {
   }
 
   const tierName = c.req.query("tier");
-  if (source.tiers[tierName] == null) {
+  if (!Object.hasOwn(source.tiers, tierName)) {
     return c.json(
       {
         error: "Unknown tier",
@@ -333,7 +335,9 @@ app.get("/price", async (c) => {
   }
 
   const tierName = c.req.query("tier");
-  const tier = source.tiers[tierName];
+  const tier = Object.hasOwn(source.tiers, tierName)
+    ? source.tiers[tierName]
+    : null;
 
   if (tier == null) {
     return c.json(

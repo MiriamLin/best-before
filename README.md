@@ -237,6 +237,8 @@ For an MCP host configuration, point the command at this repository and preserve
 - Settled payer information is stored in memory. If the service restarts after Blocky402 settlement but before the handler reads the payer, it cannot identify a refund destination. Persistent settlement storage is a deployment-level next step.
 - Ordinary delivery receipt submission is asynchronous. Refusal and upstream-failure receipt writes wait for HCS consensus because those paths involve a refund attempt.
 - A refund is a provider incentive and a return of the data fee, not insurance against a buyer's trading loss. Best Before does not diagnose *why* an indexer lags; it measures whether the data meets the sold promise.
+- The dependency tree has known vulnerabilities through the transitive protobufjs/gRPC chains of `@hashgraph/sdk` and `@x402/hedera`. There is no safe automatic fix path; an upgrade requires re-verifying the complete payment flow.
+- `/dashboard/leaderboard` and `/dashboard/indicative-price` have no cache or rate limit. The Graph API key is not exposed, but public requests can amplify its quota cost.
 
 ## License
 

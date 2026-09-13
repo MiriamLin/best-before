@@ -343,7 +343,7 @@
     <section id="proof-panel" role="tabpanel" aria-labelledby="proof-tab">
     <p class="source-statement">
       All figures decoded from HCS topic
-      <a href="https://hashscan.io/testnet/topic/0.0.10434434" target="_blank" rel="noreferrer">0.0.10434434</a>
+      <a href="https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10434434/messages?limit=100&amp;order=desc" target="_blank" rel="noreferrer">0.0.10434434</a>
       via Hedera mirror node — not from this server.
     </p>
 
@@ -423,7 +423,7 @@
     const MIRROR_BASE = "https://testnet.mirrornode.hedera.com";
     const TOPIC_ID = "0.0.10434434";
     const TOPIC_URL = `${MIRROR_BASE}/api/v1/topics/${TOPIC_ID}/messages?limit=100&order=desc`;
-    const HASHSCAN_TOPIC_URL = `https://hashscan.io/testnet/topic/${TOPIC_ID}`;
+    const MIRROR_TOPIC_URL = `${MIRROR_BASE}/api/v1/topics/${TOPIC_ID}/messages?limit=100&order=desc`;
     const DASHBOARD_SOURCE = "aerodrome-base-full";
     const INDICATIVE_PRICE_URL = `/dashboard/indicative-price?source=${encodeURIComponent(DASHBOARD_SOURCE)}`;
     const DISCLOSURE_URL = `/price?source=${encodeURIComponent(DASHBOARD_SOURCE)}&tier=realtime`;
@@ -664,7 +664,7 @@
             </div>
           </dl>
           <div class="receipt-links">
-            <a href="${HASHSCAN_TOPIC_URL}" target="_blank" rel="noreferrer">HashScan topic · sequence ${escapeHtml(receipt.sequence_number)}</a>
+            <a href="${MIRROR_TOPIC_URL}" target="_blank" rel="noreferrer">Mirror Node topic · sequence ${escapeHtml(receipt.sequence_number)}</a>
             <a href="${hcsMessageUrl}" target="_blank" rel="noreferrer">Mirror Node HCS message</a>
             ${refundLink}
           </div>
@@ -693,7 +693,7 @@
       paidNoteElement.innerHTML = `
         <div class="proof-line has-proof">HCS SEQUENCE ${escapeHtml(receipt.sequence_number)}</div>
         <div class="proof-line has-proof">AGE ${escapeHtml(receipt.age_seconds)}s VS SLA &lt;${escapeHtml(receipt.tier_sla_seconds)}s</div>
-        <div class="proof-line has-proof">CONSENSUS ${escapeHtml(formatConsensusTimestamp(receipt.consensus_timestamp))} · <a href="${HASHSCAN_TOPIC_URL}" target="_blank" rel="noreferrer">VERIFY ON HASHSCAN</a></div>
+        <div class="proof-line has-proof">CONSENSUS ${escapeHtml(formatConsensusTimestamp(receipt.consensus_timestamp))} · <a href="${MIRROR_TOPIC_URL}" target="_blank" rel="noreferrer">VERIFY ON MIRROR NODE</a></div>
       `;
     }
 

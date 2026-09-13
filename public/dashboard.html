@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Best Before — Proof Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #0c1015;
+      --panel: #131a22;
+      --border: #293441;
+      --muted: #91a0b2;
+      --text: #edf3fa;
+      --cyan: #65d7ff;
+      --green: #79e0a8;
+      --red: #ff8b8b;
+      --amber: #f6c86b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+
+    h1, h2, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      letter-spacing: -0.08em;
+    }
+
+    h2 {
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .eyebrow, .source-label {
+      color: var(--cyan);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .source-statement {
+      max-width: 880px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .source-statement a, .receipt-links a {
+      color: var(--cyan);
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin: 32px 0 18px;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      padding: 10px 14px;
+    }
+
+    button:hover { border-color: var(--cyan); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) repeat(3, minmax(120px, 1fr));
+      gap: 12px;
+    }
+
+    .metric, .receipt, .notice, .empty {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .metric { padding: 20px; }
+
+    .metric-value {
+      margin-top: 10px;
+      font-size: clamp(1.55rem, 3vw, 2.7rem);
+      font-weight: 700;
+    }
+
+    .metric-primary .metric-value { color: var(--cyan); }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .comparison, .freshness {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 20px;
+    }
+
+    .comparison-price {
+      margin: 12px 0;
+      font-size: clamp(1.4rem, 3vw, 2.3rem);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .comparison-note, .disclaimer {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    .proof-list {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+    }
+
+    .proof-line {
+      border-left: 2px solid var(--border);
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      padding-left: 9px;
+    }
+
+    .proof-line.no-claim { border-color: var(--red); }
+    .proof-line.has-proof { border-color: var(--green); }
+
+    .proof-line a { color: var(--cyan); }
+
+    .freshness-grid, .tier-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .freshness-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 16px 0;
+    }
+
+    .tier-list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .tier {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .tier.available { border-color: var(--green); }
+    .tier.unavailable { border-color: var(--amber); }
+
+    .tier-name {
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .tag {
+      color: var(--muted);
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .accountability {
+      border-left: 3px solid var(--cyan);
+      color: var(--text);
+      margin: 18px 0 32px;
+      padding: 12px 16px;
+      font-size: 1.02rem;
+      line-height: 1.55;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 28px 0;
+    }
+
+    .tab-button[aria-selected="true"] {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+
+    .leaderboard-table th,
+    .leaderboard-table td {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .leaderboard-table th {
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .leaderboard-table .unavailable { color: var(--amber); }
+    .leaderboard-table .suspect { color: var(--red); }
+
+    .leaderboard-conclusion {
+      border-left: 3px solid var(--cyan);
+      margin-top: 24px;
+      padding: 12px 16px;
+      line-height: 1.55;
+    }
+
+    .receipt-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .receipt { padding: 18px; }
+
+    .receipt-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .receipt-title {
+      margin: 6px 0 0;
+      font-size: 1.05rem;
+    }
+
+    .status {
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 6px 8px;
+      white-space: nowrap;
+    }
+
+    .delivered { color: var(--green); }
+    .refused { color: var(--amber); }
+    .undelivered { color: var(--red); }
+
+    .details {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 0;
+    }
+
+    .details div { min-width: 0; }
+
+    dt {
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    dd {
+      margin: 6px 0 0;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .claim {
+      color: var(--amber);
+      font-style: italic;
+    }
+
+    .receipt-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 18px;
+      font-size: 0.82rem;
+    }
+
+    .notice, .empty {
+      color: var(--muted);
+      line-height: 1.55;
+      padding: 16px;
+    }
+
+    .error {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    [hidden] { display: none; }
+
+    @media (max-width: 760px) {
+      .summary-grid, .comparison-grid, .freshness-grid, .tier-list, .details {
+        grid-template-columns: 1fr;
+      }
+      .receipt-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Best Before / Proof Console</p>
+    <h1>Auditable delivery history</h1>
+    <nav class="tabs" aria-label="Dashboard views">
+      <button id="proof-tab" class="tab-button" type="button" role="tab"
+        aria-selected="true" aria-controls="proof-panel">Proof Console</button>
+      <button id="leaderboard-tab" class="tab-button" type="button" role="tab"
+        aria-selected="false" aria-controls="leaderboard-panel">Standardized Leaderboard</button>
+    </nav>
+
+    <section id="proof-panel" role="tabpanel" aria-labelledby="proof-tab">
+    <p class="source-statement">
+      All figures decoded from HCS topic
+      <a href="https://hashscan.io/testnet/topic/0.0.10434434" target="_blank" rel="noreferrer">0.0.10434434</a>
+      via Hedera mirror node — not from this server.
+    </p>
+
+    <div class="toolbar">
+      <h2>HCS receipt aggregates</h2>
+      <button id="reload" type="button">Reload HCS</button>
+    </div>
+
+    <section id="summary" class="summary-grid" aria-live="polite">
+      <article class="metric metric-primary">
+        <div class="source-label">HCS receipts · completed refunds only</div>
+        <div class="metric-value">Loading…</div>
+        <div>TOTAL REFUNDED</div>
+      </article>
+    </section>
+
+    <div class="toolbar">
+      <h2>Price, evidence, and accountability</h2>
+      <span class="source-label">The Graph / HCS</span>
+    </div>
+    <section class="comparison-grid" aria-live="polite">
+      <article class="comparison">
+        <div class="source-label">The Graph · free indicative query</div>
+        <h2>FREE (indicative)</h2>
+        <div id="indicative-price" class="comparison-price">Loading…</div>
+        <div id="indicative-note" class="proof-list">
+          <div class="proof-line no-claim">NO FRESHNESS GUARANTEE</div>
+          <div class="proof-line no-claim">NO RECEIPT</div>
+          <div class="proof-line no-claim">NO RECOURSE</div>
+        </div>
+      </article>
+      <article class="comparison">
+        <div class="source-label">HCS · latest delivered receipt</div>
+        <h2>PAID (guaranteed)</h2>
+        <div id="paid-price" class="comparison-price">Loading HCS…</div>
+        <div id="paid-note" class="proof-list">
+          <div class="proof-line has-proof">Loading HCS receipt evidence…</div>
+        </div>
+      </article>
+    </section>
+    <p class="accountability">
+      You can get the number for free.<br>
+      What you cannot get for free is someone accountable for it.
+    </p>
+
+    <div class="toolbar">
+      <h2>Pre-payment freshness</h2>
+      <span class="source-label">402 disclosure · free snapshot</span>
+    </div>
+    <section class="freshness" aria-live="polite">
+      <div id="freshness-disclosure" class="empty">Loading 402 disclosure…</div>
+    </section>
+
+    <div id="error" class="notice error" hidden></div>
+
+    <div class="toolbar">
+      <h2>Latest five receipts</h2>
+      <span class="source-label">Source · HCS</span>
+    </div>
+    <section id="receipts" class="receipt-list" aria-live="polite">
+      <div class="empty">Loading paginated HCS history…</div>
+    </section>
+    </section>
+
+    <section id="leaderboard-panel" role="tabpanel" aria-labelledby="leaderboard-tab" hidden>
+      <p class="source-statement">
+        Every value on this page comes from one Messari standardized Protocol query
+        to The Graph plus the relevant chain’s RPC head — not from HCS.
+      </p>
+      <div id="leaderboard-content" class="empty">
+        Loading standardized Graph data and chain heads…
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const MIRROR_BASE = "https://testnet.mirrornode.hedera.com";
+    const TOPIC_ID = "0.0.10434434";
+    const TOPIC_URL = `${MIRROR_BASE}/api/v1/topics/${TOPIC_ID}/messages?limit=100&order=desc`;
+    const HASHSCAN_TOPIC_URL = `https://hashscan.io/testnet/topic/${TOPIC_ID}`;
+    const DASHBOARD_SOURCE = "aerodrome-base-full";
+    const INDICATIVE_PRICE_URL = `/dashboard/indicative-price?source=${encodeURIComponent(DASHBOARD_SOURCE)}`;
+    const DISCLOSURE_URL = `/price?source=${encodeURIComponent(DASHBOARD_SOURCE)}&tier=realtime`;
+    const LEADERBOARD_URL = "/dashboard/leaderboard";
+    const DELIVERY_STATUSES = new Set(["DELIVERED", "REFUSED", "UNDELIVERED"]);
+    const REFUND_STATUSES = new Set(["NOT_APPLICABLE", "COMPLETED", "FAILED"]);
+    const decoder = new TextDecoder();
+
+    const summaryElement = document.querySelector("#summary");
+    const receiptsElement = document.querySelector("#receipts");
+    const errorElement = document.querySelector("#error");
+    const reloadButton = document.querySelector("#reload");
+    const indicativePriceElement = document.querySelector("#indicative-price");
+    const indicativeNoteElement = document.querySelector("#indicative-note");
+    const paidPriceElement = document.querySelector("#paid-price");
+    const paidNoteElement = document.querySelector("#paid-note");
+    const disclosureElement = document.querySelector("#freshness-disclosure");
+    const proofPanel = document.querySelector("#proof-panel");
+    const leaderboardPanel = document.querySelector("#leaderboard-panel");
+    const proofTab = document.querySelector("#proof-tab");
+    const leaderboardTab = document.querySelector("#leaderboard-tab");
+    const leaderboardContent = document.querySelector("#leaderboard-content");
+    let leaderboardLoaded = false;
+
+    function escapeHtml(value) {
+      return String(value ?? "—")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function toTinybar(value) {
+      if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+        return null;
+      }
+      return BigInt(value);
+    }
+
+    function formatHbar(value) {
+      const tinybar = typeof value === "bigint" ? value : toTinybar(value);
+      if (tinybar == null) {
+        return "unavailable";
+      }
+
+      const whole = tinybar / 100000000n;
+      const fraction = (tinybar % 100000000n)
+        .toString()
+        .padStart(8, "0")
+        .replace(/0+$/, "");
+
+      return `${whole}${fraction === "" ? "" : `.${fraction}`} HBAR`;
+    }
+
+    function receiptFromMessage(message) {
+      try {
+        const bytes = Uint8Array.from(
+          atob(message.message),
+          (character) => character.charCodeAt(0),
+        );
+        const receipt = JSON.parse(decoder.decode(bytes));
+
+        if (
+          receipt?.v !== 1
+          || typeof receipt.request_id !== "string"
+          || !DELIVERY_STATUSES.has(receipt.delivery_status)
+          || !REFUND_STATUSES.has(receipt.refund_status)
+          || !/^\d+$/.test(String(message.sequence_number))
+        ) {
+          return null;
+        }
+
+        return {
+          ...receipt,
+          consensus_timestamp: message.consensus_timestamp,
+          sequence_number: message.sequence_number,
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchAllTopicMessages() {
+      const messages = [];
+      let nextUrl = TOPIC_URL;
+
+      while (nextUrl != null) {
+        const response = await fetch(nextUrl, {
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`Mirror Node returned HTTP ${response.status}`);
+        }
+
+        const page = await response.json();
+        messages.push(...(page.messages ?? []));
+        nextUrl = page.links?.next == null
+          ? null
+          : new URL(page.links.next, nextUrl).toString();
+      }
+
+      return messages;
+    }
+
+    function sortByNewestSequence(receipts) {
+      return receipts.sort((left, right) => {
+        const leftSequence = BigInt(left.sequence_number);
+        const rightSequence = BigInt(right.sequence_number);
+        return leftSequence === rightSequence ? 0 : leftSequence > rightSequence ? -1 : 1;
+      });
+    }
+
+    function summarize(receipts) {
+      let totalRefunded = 0n;
+      let delivered = 0;
+      let refused = 0;
+      let undelivered = 0;
+
+      for (const receipt of receipts) {
+        if (receipt.delivery_status === "DELIVERED") delivered += 1;
+        if (receipt.delivery_status === "REFUSED") refused += 1;
+        if (receipt.delivery_status === "UNDELIVERED") undelivered += 1;
+
+        if (receipt.refund_status === "COMPLETED") {
+          const refund = toTinybar(receipt.refund_tinybar);
+          if (refund != null) totalRefunded += refund;
+        }
+      }
+
+      return { totalRefunded, delivered, refused, undelivered };
+    }
+
+    function formatConsensusTimestamp(timestamp) {
+      const seconds = Number(String(timestamp).split(".")[0]);
+      if (!Number.isSafeInteger(seconds)) {
+        return "unknown consensus time";
+      }
+      return new Date(seconds * 1000).toISOString();
+    }
+
+    function snapshotDetails(receipt) {
+      if (receipt.snapshot_status === "UNAVAILABLE") {
+        return `
+          <div>
+            <dt>Snapshot fields</dt>
+            <dd class="claim">no claim made</dd>
+          </div>
+          <div>
+            <dt>Reason</dt>
+            <dd>${escapeHtml((receipt.failure_reasons ?? []).join(", "))}</dd>
+          </div>
+          <div>
+            <dt>Freshness source</dt>
+            <dd class="claim">no claim made</dd>
+          </div>
+        `;
+      }
+
+      return `
+        <div>
+          <dt>Age vs SLA</dt>
+          <dd>${escapeHtml(receipt.age_seconds)}s vs &lt;${escapeHtml(receipt.tier_sla_seconds)}s</dd>
+        </div>
+        <div>
+          <dt>Snapshot</dt>
+          <dd>block ${escapeHtml(receipt.delivered_block)} · lag ${escapeHtml(receipt.lag_blocks)}</dd>
+        </div>
+        <div>
+          <dt>Data</dt>
+          <dd>${escapeHtml(receipt.pair)} ${receipt.price == null ? "no claim made" : escapeHtml(receipt.price)}</dd>
+        </div>
+      `;
+    }
+
+    function transactionIdToPrettyId(transactionId) {
+      const match = /^(\d+\.\d+\.\d+)@(\d+)\.(\d+)$/.exec(transactionId ?? "");
+      return match == null ? null : `${match[1]}-${match[2]}-${match[3]}`;
+    }
+
+    async function getRefundHashscanUrl(transactionId) {
+      const prettyId = transactionIdToPrettyId(transactionId);
+      if (prettyId == null) {
+        return null;
+      }
+
+      const response = await fetch(
+        `${MIRROR_BASE}/api/v1/transactions/${encodeURIComponent(prettyId)}`,
+        { headers: { Accept: "application/json" } },
+      );
+      if (!response.ok) {
+        return null;
+      }
+
+      const transaction = (await response.json()).transactions?.[0];
+      if (typeof transaction?.consensus_timestamp !== "string") {
+        return null;
+      }
+
+      return `https://hashscan.io/testnet/transaction/${encodeURIComponent(transaction.consensus_timestamp)}?tid=${encodeURIComponent(prettyId)}`;
+    }
+
+    function receiptCard(receipt) {
+      const statusClass = receipt.delivery_status.toLowerCase();
+      const hcsMessageUrl = `${MIRROR_BASE}/api/v1/topics/${TOPIC_ID}/messages?sequencenumber=${encodeURIComponent(receipt.sequence_number)}`;
+      const refundDetails = receipt.refund_status === "COMPLETED"
+        ? `${formatHbar(receipt.refund_tinybar)} · completed`
+        : receipt.refund_status === "FAILED"
+          ? `${formatHbar(receipt.refund_tinybar)} · failed`
+          : "not applicable";
+
+      const refundLink = receipt.refund_status === "COMPLETED" && receipt.refund_tx_id != null
+        ? `<span id="refund-${escapeHtml(receipt.sequence_number)}">Resolving refund transaction…</span>`
+        : "";
+
+      return `
+        <article class="receipt">
+          <div class="receipt-header">
+            <div>
+              <div class="source-label">HCS receipt · sequence ${escapeHtml(receipt.sequence_number)}</div>
+              <p class="receipt-title">${escapeHtml(receipt.request_id)} · ${escapeHtml(formatConsensusTimestamp(receipt.consensus_timestamp))}</p>
+            </div>
+            <span class="status ${statusClass}">${escapeHtml(receipt.delivery_status)}</span>
+          </div>
+          <dl class="details">
+            ${snapshotDetails(receipt)}
+            <div>
+              <dt>Paid / refunded</dt>
+              <dd>${escapeHtml(formatHbar(receipt.paid_tinybar))} / ${escapeHtml(refundDetails)}</dd>
+            </div>
+            <div>
+              <dt>Refund status</dt>
+              <dd>${escapeHtml(receipt.refund_status)}</dd>
+            </div>
+            <div>
+              <dt>Receipt verdict</dt>
+              <dd>${escapeHtml(receipt.verdict)}</dd>
+            </div>
+          </dl>
+          <div class="receipt-links">
+            <a href="${HASHSCAN_TOPIC_URL}" target="_blank" rel="noreferrer">HashScan topic · sequence ${escapeHtml(receipt.sequence_number)}</a>
+            <a href="${hcsMessageUrl}" target="_blank" rel="noreferrer">Mirror Node HCS message</a>
+            ${refundLink}
+          </div>
+        </article>
+      `;
+    }
+
+    function renderPaidPrice(receipts) {
+      const receipt = receipts.find((candidate) => (
+        candidate.delivery_status === "DELIVERED"
+        && candidate.snapshot_status === "AVAILABLE"
+        && typeof candidate.price === "string"
+      ));
+
+      if (receipt == null) {
+        paidPriceElement.textContent = "No delivered receipt";
+        paidNoteElement.innerHTML = `
+          <div class="proof-line no-claim">NO HCS DELIVERY RECEIPT</div>
+          <div class="proof-line no-claim">NO GUARANTEED PRICE CLAIM</div>
+          <div class="proof-line no-claim">NO ACCOUNTABILITY CLAIM</div>
+        `;
+        return;
+      }
+
+      paidPriceElement.textContent = `${receipt.pair} ${receipt.price}`;
+      paidNoteElement.innerHTML = `
+        <div class="proof-line has-proof">HCS SEQUENCE ${escapeHtml(receipt.sequence_number)}</div>
+        <div class="proof-line has-proof">AGE ${escapeHtml(receipt.age_seconds)}s VS SLA &lt;${escapeHtml(receipt.tier_sla_seconds)}s</div>
+        <div class="proof-line has-proof">CONSENSUS ${escapeHtml(formatConsensusTimestamp(receipt.consensus_timestamp))} · <a href="${HASHSCAN_TOPIC_URL}" target="_blank" rel="noreferrer">VERIFY ON HASHSCAN</a></div>
+      `;
+    }
+
+    async function loadIndicativePrice() {
+      indicativePriceElement.textContent = "Loading…";
+      indicativeNoteElement.innerHTML = `
+        <div class="proof-line no-claim">NO FRESHNESS GUARANTEE</div>
+        <div class="proof-line no-claim">NO RECEIPT</div>
+        <div class="proof-line no-claim">NO RECOURSE</div>
+      `;
+
+      try {
+        const response = await fetch(INDICATIVE_PRICE_URL, {
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const body = await response.json();
+        if (typeof body?.data?.price !== "string") {
+          throw new Error("response is missing price data");
+        }
+
+        indicativePriceElement.textContent = `${body.data.pair} ${body.data.price}`;
+      } catch {
+        indicativePriceElement.textContent = "Unavailable";
+        indicativeNoteElement.innerHTML = `
+          <div class="proof-line no-claim">NO FRESHNESS GUARANTEE</div>
+          <div class="proof-line no-claim">NO RECEIPT</div>
+          <div class="proof-line no-claim">THE GRAPH QUERY UNAVAILABLE · NO CLAIM MADE</div>
+        `;
+      }
+    }
+
+    function renderDisclosure(disclosure) {
+      if (disclosure.status !== "AVAILABLE") {
+        disclosureElement.innerHTML = `
+          <div class="source-label">402 disclosure</div>
+          <p class="claim">Pre-payment freshness is unavailable. No SLA claim is made.</p>
+          <p class="disclaimer">${escapeHtml(disclosure.disclaimer ?? "")}</p>
+        `;
+        return;
+      }
+
+      const tiers = Array.isArray(disclosure.tiers) ? disclosure.tiers : [];
+      disclosureElement.innerHTML = `
+        <div class="freshness-grid">
+          <div>
+            <div class="tag">Source · 402 disclosure</div>
+            <strong>age ${escapeHtml(disclosure.age_seconds)}s</strong>
+          </div>
+          <div>
+            <div class="tag">Source · 402 disclosure</div>
+            <strong>lag ${escapeHtml(disclosure.lag_blocks)}</strong>
+          </div>
+          <div>
+            <div class="tag">Source · 402 disclosure</div>
+            <strong>${escapeHtml(disclosure.chain)}</strong>
+          </div>
+        </div>
+        <div class="tier-list">
+          ${tiers.map((tier) => `
+            <article class="tier ${tier.available ? "available" : "unavailable"}">
+              <div class="tag">Source · 402 disclosure</div>
+              <div class="tier-name">${escapeHtml(tier.name)} ${tier.available ? "✓" : "✗"}</div>
+              <div>&lt;${escapeHtml(tier.max_age_seconds)}s · ${escapeHtml(formatHbar(tier.price_tinybar))}</div>
+              <div class="comparison-note">${escapeHtml((tier.failure_reasons ?? []).join(", ") || "available")}</div>
+            </article>
+          `).join("")}
+        </div>
+        <p class="disclaimer">${escapeHtml(disclosure.disclaimer)}</p>
+      `;
+    }
+
+    async function loadDisclosure() {
+      disclosureElement.innerHTML = '<div class="empty">Loading 402 disclosure…</div>';
+
+      try {
+        const response = await fetch(DISCLOSURE_URL, {
+          headers: { Accept: "application/json" },
+        });
+        if (response.status !== 402) {
+          throw new Error(`expected HTTP 402, got ${response.status}`);
+        }
+
+        const disclosure = (await response.json()).freshness_disclosure;
+        if (disclosure == null) {
+          throw new Error("response is missing freshness_disclosure");
+        }
+        renderDisclosure(disclosure);
+      } catch {
+        disclosureElement.innerHTML = `
+          <div class="source-label">402 disclosure</div>
+          <p class="claim">Pre-payment freshness is unavailable. No SLA claim is made.</p>
+        `;
+      }
+    }
+
+    function leaderboardStatusClass(status) {
+      if (status === "UNAVAILABLE" || status === "INDEXING_ERRORS") {
+        return "unavailable";
+      }
+      if (status === "SUSPECT") {
+        return "suspect";
+      }
+      return "";
+    }
+
+    function renderLeaderboard(leaderboard) {
+      const rows = Array.isArray(leaderboard.rows) ? leaderboard.rows : [];
+      const diagnostics = Array.isArray(leaderboard.diagnostics)
+        ? leaderboard.diagnostics
+        : [];
+
+      leaderboardContent.innerHTML = `
+        <div class="toolbar">
+          <h2>Standardization leverage</h2>
+          <span class="source-label">The Graph + RPC</span>
+        </div>
+        <p class="source-statement">
+          one standardized query, five protocols, no per-protocol adapters
+        </p>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>Protocol <span class="tag">The Graph</span></th>
+              <th>Chain <span class="tag">The Graph</span></th>
+              <th>Schema <span class="tag">The Graph</span></th>
+              <th>TVL <span class="tag">The Graph</span></th>
+              <th>Freshness <span class="tag">The Graph + RPC</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.protocol)}</td>
+                <td>${escapeHtml(row.chain)}</td>
+                <td>${escapeHtml(row.schema)}</td>
+                <td>${escapeHtml(row.tvl)}</td>
+                <td class="${leaderboardStatusClass(row.status)}">
+                  ${escapeHtml(row.freshness)}
+                  ${row.reason == null ? "" : `<br><span class="comparison-note">${escapeHtml(row.reason)}</span>`}
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+
+        <div class="toolbar">
+          <h2>Limits of the leverage</h2>
+          <span class="source-label">The Graph</span>
+        </div>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>Protocol <span class="tag">The Graph</span></th>
+              <th>Status <span class="tag">The Graph</span></th>
+              <th>Reason <span class="tag">The Graph</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${diagnostics.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.protocol)}</td>
+                <td class="${leaderboardStatusClass(row.status)}">${escapeHtml(row.status)}</td>
+                <td>${escapeHtml(row.reason)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+
+        <p class="leaderboard-conclusion">
+          Standardization solves how to ask,<br>
+          not whether the answer can be trusted.
+        </p>
+      `;
+    }
+
+    async function loadLeaderboard() {
+      leaderboardContent.innerHTML = '<div class="empty">Loading standardized Graph data and chain heads…</div>';
+
+      try {
+        const response = await fetch(LEADERBOARD_URL, {
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        renderLeaderboard(await response.json());
+        leaderboardLoaded = true;
+      } catch {
+        leaderboardContent.innerHTML = `
+          <div class="notice error">
+            Standardized leaderboard is unavailable. No claim made.
+          </div>
+        `;
+      }
+    }
+
+    function selectTab(tab) {
+      const showLeaderboard = tab === "leaderboard";
+      proofPanel.hidden = showLeaderboard;
+      leaderboardPanel.hidden = !showLeaderboard;
+      proofTab.setAttribute("aria-selected", String(!showLeaderboard));
+      leaderboardTab.setAttribute("aria-selected", String(showLeaderboard));
+
+      if (showLeaderboard && !leaderboardLoaded) {
+        loadLeaderboard();
+      }
+    }
+
+    async function resolveRefundLinks(receipts) {
+      await Promise.all(receipts.map(async (receipt) => {
+        if (receipt.refund_status !== "COMPLETED" || receipt.refund_tx_id == null) {
+          return;
+        }
+
+        const element = document.querySelector(`#refund-${CSS.escape(receipt.sequence_number)}`);
+        if (element == null) {
+          return;
+        }
+
+        try {
+          const href = await getRefundHashscanUrl(receipt.refund_tx_id);
+          element.replaceWith(href == null
+            ? document.createTextNode("Refund transaction could not be resolved")
+            : Object.assign(document.createElement("a"), {
+              href,
+              target: "_blank",
+              rel: "noreferrer",
+              textContent: "HashScan refund transaction",
+            }));
+        } catch {
+          element.textContent = "Refund transaction could not be resolved";
+        }
+      }));
+    }
+
+    function renderSummary(summary, excludedMessages) {
+      summaryElement.innerHTML = `
+        <article class="metric metric-primary">
+          <div class="source-label">HCS receipts · completed refunds only</div>
+          <div class="metric-value">${escapeHtml(formatHbar(summary.totalRefunded))}</div>
+          <div>TOTAL REFUNDED</div>
+        </article>
+        <article class="metric">
+          <div class="source-label">HCS receipts</div>
+          <div class="metric-value">${summary.delivered}</div>
+          <div>DELIVERED</div>
+        </article>
+        <article class="metric">
+          <div class="source-label">HCS receipts</div>
+          <div class="metric-value">${summary.refused}</div>
+          <div>REFUSED</div>
+        </article>
+        <article class="metric">
+          <div class="source-label">HCS receipts</div>
+          <div class="metric-value">${summary.undelivered}</div>
+          <div>UNDELIVERED</div>
+        </article>
+        ${excludedMessages === 0 ? "" : `
+          <p class="notice">Excluded ${excludedMessages} legacy or non-receipt HCS message(s) from current-schema totals.</p>
+        `}
+      `;
+    }
+
+    async function loadProof() {
+      errorElement.hidden = true;
+      reloadButton.disabled = true;
+      reloadButton.textContent = "Loading HCS…";
+      receiptsElement.innerHTML = '<div class="empty">Following HCS pagination…</div>';
+
+      try {
+        const messages = await fetchAllTopicMessages();
+        const receipts = sortByNewestSequence(
+          messages.map(receiptFromMessage).filter((receipt) => receipt != null),
+        );
+        renderSummary(summarize(receipts), messages.length - receipts.length);
+        renderPaidPrice(receipts);
+
+        const latestReceipts = receipts.slice(0, 5);
+        receiptsElement.innerHTML = latestReceipts.length === 0
+          ? '<div class="empty">No current-schema receipts found in this HCS topic.</div>'
+          : latestReceipts.map(receiptCard).join("");
+
+        await resolveRefundLinks(latestReceipts);
+      } catch (error) {
+        renderPaidPrice([]);
+        receiptsElement.innerHTML = '<div class="empty">No HCS data was rendered.</div>';
+        errorElement.textContent = `Unable to load Mirror Node data: ${error.message}`;
+        errorElement.hidden = false;
+      } finally {
+        reloadButton.disabled = false;
+        reloadButton.textContent = "Reload HCS";
+      }
+    }
+
+    async function loadDashboard() {
+      await Promise.all([
+        loadProof(),
+        loadIndicativePrice(),
+        loadDisclosure(),
+      ]);
+    }
+
+    reloadButton.addEventListener("click", loadDashboard);
+    proofTab.addEventListener("click", () => selectTab("proof"));
+    leaderboardTab.addEventListener("click", () => selectTab("leaderboard"));
+    loadDashboard();
+  </script>
+</body>
+</html>

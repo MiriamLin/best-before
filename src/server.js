@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
@@ -10,6 +11,8 @@ import { measureSnapshot } from "./freshness.js";
 import { submitReceipt, waitForPendingReceiptWrites } from "./hcs.js";
 import { buildReceipt, REFUND_FAILURE_REASON_PROCESSING_FAILED } from "./receipt.js";
 import { refundBuyer } from "./refund.js";
+import { buildStandardLeaderboard } from "./standard-leaderboard.js";
+import { fetchSubgraphSnapshot } from "./subgraph.js";
 import { evaluateTier, evaluateTiers } from "./tiers.js";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -18,7 +21,7 @@ const BLOCKY402_URL = "https://api.testnet.blocky402.com";
 const SETTLED_PAYMENT_TTL_MS = 5 * 60 * 1000;
 const DISCLOSURE_CACHE_TTL_MS = 5_000;
 const DISCLOSURE_TIMEOUT_MS = 2_000;
-const { sources } = loadConfig();
+const { graphApiKey, sources } = loadConfig();
 
 function requireEnvironmentVariable(name) {
   const value = process.env[name];
@@ -125,6 +128,7 @@ async function buildUnpaidResponseBody(context) {
       body: {
         freshness_disclosure: {
           status: "AVAILABLE",
+          chain: source.chain,
           age_seconds: snapshot.age_seconds,
           lag_blocks: snapshot.lag_blocks,
           tiers: buildTierDisclosure(source, snapshot),
@@ -215,6 +219,54 @@ function takeSettledPayment(c) {
 export const app = new Hono();
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+app.get("/dashboard", serveStatic({
+  root: "./public",
+  path: "dashboard.html",
+  onFound: (_path, c) => {
+    c.header("Cache-Control", "no-store");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'self'; connect-src 'self' https://testnet.mirrornode.hedera.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    );
+  },
+}));
+
+app.get("/dashboard/indicative-price", async (c) => {
+  const sourceId = c.req.query("source");
+  const source = sources.find((candidate) => candidate.id === sourceId);
+
+  if (source == null) {
+    return c.json({ error: "Unknown source" }, 400);
+  }
+
+  if (source.price_feed == null) {
+    return c.json({ error: "Indicative price is not configured for this source" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSubgraphSnapshot(source, { timeoutMs: 2_000 });
+
+    return c.json({
+      source: source.id,
+      chain: source.chain,
+      data: snapshot.price,
+    });
+  } catch (error) {
+    console.error(`[dashboard] ${source.id}: ${error.message}`);
+    return c.json({ error: "Indicative price is unavailable" }, 502);
+  }
+});
+
+app.get("/dashboard/leaderboard", async (c) => {
+  try {
+    return c.json(await buildStandardLeaderboard({ graphApiKey }));
+  } catch (error) {
+    console.error(`[dashboard] leaderboard: ${error.message}`);
+    return c.json({ error: "Standardized leaderboard is unavailable" }, 502);
+  }
+});
 
 app.use("/price", async (c, next) => {
   const sourceId = c.req.query("source");
